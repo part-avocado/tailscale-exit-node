@@ -11,7 +11,7 @@ if [ ! -c /dev/net/tun ]; then
 fi
 
 if [ ! -c /dev/net/tun ]; then
-    echo "ERROR: /dev/net/tun not available. Enable Privileged mode in Railway service settings." >&2
+    echo "ERROR: /dev/net/tun not available. The host must expose the TUN device." >&2
     exit 1
 fi
 
