@@ -1,19 +1,26 @@
 #!/bin/sh
 set -e
 
-# Create TUN device if needed (requires privileged mode in Railway)
+# Create TUN device if not already present.
+# mknod is allowed when Railway "Privileged" mode is enabled.
+# If it fails (not yet privileged), continue — Railway may already provide it.
 mkdir -p /dev/net
 if [ ! -c /dev/net/tun ]; then
-    mknod /dev/net/tun c 10 200
-    chmod 600 /dev/net/tun
+    mknod /dev/net/tun c 10 200 2>/dev/null || true
+    chmod 600 /dev/net/tun 2>/dev/null || true
+fi
+
+if [ ! -c /dev/net/tun ]; then
+    echo "ERROR: /dev/net/tun not available. Enable Privileged mode in Railway service settings." >&2
+    exit 1
 fi
 
 # Enable IP forwarding
-sysctl -w net.ipv4.ip_forward=1   2>/dev/null || echo 1 > /proc/sys/net/ipv4/ip_forward
+sysctl -w net.ipv4.ip_forward=1 2>/dev/null || echo 1 > /proc/sys/net/ipv4/ip_forward
 sysctl -w net.ipv6.conf.all.forwarding=1 2>/dev/null || echo 1 > /proc/sys/net/ipv6/conf/all/forwarding
 
 # Create state dir
-mkdir -p /var/lib/tailscale
+mkdir -p /var/lib/tailscale /var/run/tailscale
 
 # Start tailscaled
 tailscaled \
@@ -23,11 +30,16 @@ tailscaled \
 
 TAILSCALED_PID=$!
 
-# Wait for socket
+# Wait for socket (up to 30s)
 for i in $(seq 1 30); do
     [ -S /var/run/tailscale/tailscaled.sock ] && break
     sleep 1
 done
+
+if [ ! -S /var/run/tailscale/tailscaled.sock ]; then
+    echo "ERROR: tailscaled failed to start" >&2
+    exit 1
+fi
 
 # Bring up Tailscale as exit node
 tailscale up \
