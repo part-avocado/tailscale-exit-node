@@ -1,10 +1,8 @@
-# Tailscale Exit Node on Railway
+# Tailscale Exit Node on Fly.io
 
-A minimal Tailscale exit node running on Railway (US East — Boston-adjacent).
+A minimal Tailscale exit node deployed on Fly.io (US East — `iad`, Washington DC).
 
-## How it works
-
-The container runs `tailscaled` + `tailscale up --advertise-exit-node` inside Alpine Linux. Railway deploys it from this GitHub repo.
+Fly.io runs full Firecracker microVMs (not restricted containers), so `/dev/net/tun` and network capabilities are available without any special flags.
 
 ---
 
@@ -14,64 +12,66 @@ The container runs `tailscaled` + `tailscale up --advertise-exit-node` inside Al
 
 1. Go to [Tailscale Admin → Settings → Keys](https://login.tailscale.com/admin/settings/keys)
 2. Click **Generate auth key**
-3. Check **Reusable** (so Railway can redeploy without a new key)
-4. Optionally check **Pre-authorized** to skip manual approval
+3. Check **Reusable** (so Fly.io can redeploy without a new key)
+4. Optionally check **Pre-authorized** to skip the manual approval step
 5. Copy the key (starts with `tskey-auth-...`)
 
-### 2. Deploy to Railway
+### 2. Install flyctl and log in
 
-1. Go to [railway.app](https://railway.app) and create a new project
-2. Click **Deploy from GitHub repo** → connect your GitHub account → select `tailscale-exit-node`
-3. Railway will detect the `Dockerfile` and start building
+```bash
+brew install flyctl   # or: curl -L https://fly.io/install.sh | sh
+fly auth login
+```
 
-### 3. Add environment variables in Railway
+### 3. Create the Fly.io app
 
-In your Railway service → **Variables**, add:
+```bash
+fly apps create tailscale-exit-node   # choose any globally unique name
+```
 
-| Variable | Value |
-|----------|-------|
-| `TS_AUTHKEY` | `tskey-auth-...` (your auth key from step 1) |
-| `TS_HOSTNAME` | `railway-exit-node` (optional, any name you want) |
+Then update the `app` field in `fly.toml` to match.
 
-### 4. Enable Privileged mode in Railway
+### 4. Set your Tailscale auth key as a secret
 
-The container needs kernel-level access to create a TUN device:
+```bash
+fly secrets set TS_AUTHKEY=tskey-auth-xxxxxxxxxxxx
+# optional:
+fly secrets set TS_HOSTNAME=fly-exit-node
+```
 
-1. In your Railway service → **Settings** → scroll to **Networking**
-2. Enable **Privileged** mode
+### 5. Deploy
 
-Then redeploy.
+```bash
+fly deploy
+```
 
-### 5. Approve the exit node in Tailscale Admin
+That's it. Watch the logs with `fly logs`.
 
-Unless you used a pre-authorized key, approve the node:
+### 6. Approve the exit node in Tailscale Admin
+
+Unless you used a pre-authorized key, you still need to enable the route:
 
 1. Go to [Tailscale Admin → Machines](https://login.tailscale.com/admin/machines)
-2. Find `railway-exit-node` → click `...` → **Edit route settings**
-3. Enable **Use as exit node**
+2. Find your node → `...` → **Edit route settings** → enable **Use as exit node**
 
-### 6. Use the exit node
+### 7. Use it
 
-On any of your Tailscale devices:
-
-- **macOS/iOS/Windows**: Tailscale menu → **Exit Node** → select `railway-exit-node`
-- **Linux CLI**: `tailscale up --exit-node=railway-exit-node`
+- **macOS/iOS/Windows**: Tailscale menu → Exit Node → select your node
+- **Linux**: `tailscale up --exit-node=fly-exit-node`
 
 ---
 
-## Environment variables
+## Environment variables / secrets
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `TS_AUTHKEY` | Yes | Tailscale auth key |
+| `TS_AUTHKEY` | Yes | Tailscale auth key (`fly secrets set`) |
 | `TS_HOSTNAME` | No | Hostname shown in Tailscale admin (default: `railway-exit-node`) |
 
 ---
 
-## Troubleshooting
+## Redeploying
 
-**Container crashes on start** — Make sure Privileged mode is enabled in Railway service settings.
+Push to `main` or run `fly deploy` from the repo directory.
 
-**Exit node not appearing** — Check Railway deploy logs. The auth key may be expired or single-use.
-
-**Can't approve exit node** — Enable it manually in [Tailscale Admin → Machines](https://login.tailscale.com/admin/machines) or regenerate the key with "Pre-authorized" checked.
+To check status: `fly status` or `fly logs`

@@ -1,7 +1,0 @@
-[build]
-builder = "dockerfile"
-dockerfilePath = "Dockerfile"
-
-[deploy]
-region = "us-east"
-restartPolicyType = "always"

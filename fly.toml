@@ -1,0 +1,13 @@
+# Run `fly apps create <your-app-name>` first, then update the `app` field below.
+app = "tailscale-exit-node"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+# No [http_service] — this is not a web app.
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
